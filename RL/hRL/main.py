@@ -1,8 +1,12 @@
 import gym
 import numpy as np
+from numpy.linalg.linalg import _multi_dot_matrix_chain_order
 import torch as T
+import torch.nn.functional as F
+
 import matplotlib.pyplot as plt
 from actor_crit_network import Agent
+from sep_actor_critic_networks import sepAgent
 
 def get_levelsets_dummy(env, vel_field_data=None, tang_spac=1, radial_spac=1):
     start_pos = env.start_pos
@@ -72,27 +76,64 @@ class customPlot():
                 y = Y[i,j]
                 state = np.array([x,y], dtype=np.float32).reshape(2,)
                 state = T.tensor([state])
-                _, V[i][j] = agent.actor_critic.forward(state)
+                # probs, V[i][j] = agent.actor_critic.forward(state)
+                V[i][j] = agent.critic.forward(state)
+      
+                
         plt.contourf(X,Y,V,zorder=-100)
         plt.colorbar()
         if save_fig:
             plt.savefig(fname, dpi=300)
 
-env = gym.make("gym_basic:contGrid-v0", state_dim=2, action_dim=5, 
-                grid_dim=[10.,10.],start_pos=[5.0,2.0], target_pos=[8.0,8.0], target_rad=1)
-obs = env.reset()
-# print("check obs:", (obs[0], obs[1]), obs[0])
+    def plot_policy_arrows(self, probs, x, y):
+        dx = np.array([0, 0, 1, 0, -1 ])
+        dy = np.array([0, 1, 0, -1, 0 ])
+        dx = np.multiply(probs[0,:],dx)
+        dy = np.multiply(probs[0,:],dy)
+        for i in range(5):
+            plt.arrow(x,y,dx[i],dy[i], head_width=0.1)
 
-level_sets =  get_levelsets_dummy(env)
-pl = customPlot(env)
-pl.plot_contours(level_sets, fname='contours.png',save_fig=True)
 
-agent = Agent(gamma = 0.99, lr = 5e-6, ip_dims=2, n_actions=5, hl1_dims=512, hl2_dims=512)
+    def plot_policy(self, agent, fname = '', save_fig=False):
+        xs = np.linspace(0, self.env.xlim, 6)
+        ys = np.linspace(0, self.env.ylim, 6)
+        X,Y = np.meshgrid(xs,ys)
+        pi = {}
+        # print("V.shape:", V.shape)
+        for i in range(len(xs)):
+            for j in range(len(ys)):
+                x = X[i,j]
+                y = Y[i,j]
+                state = np.array([x,y], dtype=np.float32).reshape(2,)
+                state = T.tensor([state])
+                # probs, V[i][j] = agent.actor_critic.forward(state)
+                probs = agent.actor.forward(state)
+                probs = F.softmax(probs, dim=1)
+                probs = probs.detach().numpy()
+                pi[(i,j)] = probs
+                self.plot_policy_arrows(probs, x, y)
+        print("check pi",pi[(2,2)])
+        if save_fig:
+            plt.savefig(fname, dpi=300)
+
+    def plot_series(self, series, label='', title='', fname = '', save_fig=False):
+        plt.plot(series, label=label)
+        plt.title(title)
+        plt.legend()
+        if save_fig:
+            plt.savefig(fname, dpi=300)
+
+
 
 def method1_forward_aproach(env, agent, n_iters):
     obs = env.reset()
     scores = []
+    # max_actor_loss_list = []
+    # max_critic_loss_list = []
+    avg_score_list = []
     for i in range(n_iters):
+        # actor_loss_list = []
+        # critic_loss_list = []
         done = False
         score=0
         obs = env.reset()
@@ -102,12 +143,22 @@ def method1_forward_aproach(env, agent, n_iters):
             score += reward
             agent.learn(obs, reward, obs_, done)
             obs = obs_
+            # actor_loss_list.append(actor_loss)
+            # critic_loss_list.append(critic_loss)
+        # max_actor_loss = max(actor_loss_list)
+        # max_critic_loss = max(critic_loss_list)
+        # max_actor_loss_list.append(max_actor_loss)
+        # max_critic_loss_list.append(max_critic_loss)
         scores.append(score)
         avg_score = np.mean(scores[-100:])
+        avg_score_list.append(avg_score)
         if i%100==0:
-            print('episode ',i , 'score=', score, 'avg_score=', avg_score)
+            print('episode ',i , 'score=', score, 'avg_score=', avg_score, )
+            # print("losses:", max_actor_loss, max_critic_loss)
     fname = 'model' +  str(n_iters)
     agent.save_model(fname=fname)
+    return avg_score_list
+    
 
 def method2_a(env,level_sets, iters_per_contour=100):
     # iters_per_contour = 200
@@ -149,23 +200,46 @@ def rollout(env, agent, load_file=None):
         print("s: ", obs)
     return traj
 
-# method1_forward_aproach(env, agent, 10000)
-# traj=rollout(env, agent)
-# print("traj", traj)
-# pl.plot_traj(traj,fname='traj.png', save_fig=True)
 
-method2_a(env,level_sets,iters_per_contour=400)
+env = gym.make("gym_basic:contGrid-v0", state_dim=2, action_dim=5, 
+                grid_dim=[10.,10.],start_pos=[5.0,2.0], target_pos=[8.0,8.0], target_rad=1)
+obs = env.reset()
+level_sets =  get_levelsets_dummy(env)
+
+pl = customPlot(env)
+pl.plot_contours(level_sets, fname='contours.png',save_fig=True)
+n_iters = 5000
+agent = Agent(gamma = 0.99, lr = 5e-6, ip_dims=2, n_actions=5, hl1_dims=512, hl2_dims=512)
+avg_score_list = method1_forward_aproach(env, agent, n_iters)
 traj=rollout(env, agent)
 print("traj", traj)
-pl.plot_traj(traj,fname='m2a_traj.png', save_fig=True)
+# pl.plot_traj(traj,fname='traj.png', save_fig=True)
+plt.clf()
+pl.plot_series(avg_score_list, label='combined_network',fname= 'avg_score_comparison', save_fig=False)
+
+obs = env.reset()
+agent = sepAgent(gamma = 0.99, lr = 5e-6, ip_dims=2, n_actions=5, hl1_dims=512, hl2_dims=512)
+avg_score_list = method1_forward_aproach(env, agent, n_iters)
+traj=rollout(env, agent)
+print("traj", traj)
+# pl.plot_traj(traj,fname='traj.png', save_fig=True)
+# plt.clf()
+pl.plot_series(avg_score_list, label='separate_network',fname= 'avg_score_comparison', save_fig=True)
+
+# method2_a(env,level_sets,iters_per_contour=10)
+# traj=rollout(env, agent)
+# print("traj", traj)
+# pl.plot_traj(traj,fname='m2a_traj.png', save_fig=True)
 
 # print( "Now running loaded model")
-traj2 = rollout(env, agent, load_file='model_method_2_400')
-print("traj2", traj2)
-pl.plot_traj(traj2,fname='m2a_traj2.png', save_fig=True)
+# traj2 = rollout(env, agent, load_file='model10000')
+# print("traj2", traj2)
+# pl.plot_traj(traj2,fname='m2a_traj2.png', save_fig=True)
 
-pl.clf()
-pl.setup_fig()
-pl.plot_V(agent, fname='m2a_value_fn.png', save_fig=True)
-
+# pl.clf()
+# pl.setup_fig()
+# # pl.plot_V(agent, fname='m2a_value_fn.png', save_fig=True)
+# pl.clf()
+# pl.setup_fig()
+# pl.plot_policy(agent, fname='m1_policy.png', save_fig=True)
 
