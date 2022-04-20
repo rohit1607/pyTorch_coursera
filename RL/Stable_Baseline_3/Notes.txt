@@ -1,0 +1,11 @@
+1. Idea seems to be working (third commit). Vplot shows better contours for curriculum learning.
+2. Cirriculum learning also seems to be faster (TODO: returns vs training time plot)
+
+
+
+TODO:
+1. Set up experiment name, logs
+2. plot returns vs traing time
+3. experiment with more separation and larger grid 
+4. try with velocity field - need level set solver
+5. two way level sets to prune cirricula
