@@ -7,6 +7,9 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from actor_crit_network import Agent
 from sep_actor_critic_networks import sepAgent
+from utils import make_dir
+from definitions import PROJECT_ROOT
+import os
 
 def get_levelsets_dummy(env, vel_field_data=None, tang_spac=1, radial_spac=1):
     start_pos = env.start_pos
@@ -182,6 +185,30 @@ def method2_a(env,level_sets, iters_per_contour=100):
     fname = 'model_method_2_' +  str(iters_per_contour)
     agent.save_model(fname=fname)
 
+
+def method2_b(env,level_sets, iters_per_contour=100):
+    # iters_per_contour = 200
+    for contour in level_sets:
+        for i in range(iters_per_contour):
+            done = False
+            score=0
+            start_pt = contour[i%len(contour)]
+            obs = env.reset(reset_state=start_pt)
+            scores = []
+            while not done:
+                action = agent.choose_action(obs)
+                obs_, reward, done, info = env.step(action)
+                score += reward
+                agent.learn(obs, reward, obs_, done)
+                obs = obs_
+            scores.append(score)
+            avg_score = np.mean(scores[-100:])
+            if i%100==0:
+                print('episode ',i , 'score=', score, 'avg_score=', avg_score)
+    fname = 'model_method_2_' +  str(iters_per_contour)
+    agent.save_model(fname=fname)
+
+
 def rollout(env, agent, load_file=None):
     obs = env.reset()
     if load_file != None:
@@ -200,31 +227,85 @@ def rollout(env, agent, load_file=None):
         print("s: ", obs)
     return traj
 
+def compare_networks():
+    """Archived function for reference"""
 
-env = gym.make("gym_basic:contGrid-v0", state_dim=2, action_dim=5, 
+    env = gym.make("gym_basic:contGrid-v0", state_dim=2, action_dim=5, 
                 grid_dim=[10.,10.],start_pos=[5.0,2.0], target_pos=[8.0,8.0], target_rad=1)
-obs = env.reset()
-level_sets =  get_levelsets_dummy(env)
+    obs = env.reset()
+    level_sets =  get_levelsets_dummy(env)
 
-pl = customPlot(env)
-pl.plot_contours(level_sets, fname='contours.png',save_fig=True)
-n_iters = 5000
-agent = Agent(gamma = 0.99, lr = 5e-6, ip_dims=2, n_actions=5, hl1_dims=512, hl2_dims=512)
-avg_score_list = method1_forward_aproach(env, agent, n_iters)
-traj=rollout(env, agent)
-print("traj", traj)
-# pl.plot_traj(traj,fname='traj.png', save_fig=True)
-plt.clf()
-pl.plot_series(avg_score_list, label='combined_network',fname= 'avg_score_comparison', save_fig=False)
+    pl = customPlot(env)
+    pl.plot_contours(level_sets, fname='contours.png',save_fig=True)
+    n_iters = 5000
+    agent = Agent(gamma = 0.99, lr = 5e-6, ip_dims=2, n_actions=5, hl1_dims=512, hl2_dims=512)
+    avg_score_list = method1_forward_aproach(env, agent, n_iters)
+    traj=rollout(env, agent)
+    print("traj", traj)
+    # pl.plot_traj(traj,fname='traj.png', save_fig=True)
+    plt.clf()
+    pl.plot_series(avg_score_list, label='combined_network',fname= 'avg_score_comparison', save_fig=False)
 
-obs = env.reset()
-agent = sepAgent(gamma = 0.99, lr = 5e-6, ip_dims=2, n_actions=5, hl1_dims=512, hl2_dims=512)
-avg_score_list = method1_forward_aproach(env, agent, n_iters)
-traj=rollout(env, agent)
-print("traj", traj)
-# pl.plot_traj(traj,fname='traj.png', save_fig=True)
-# plt.clf()
-pl.plot_series(avg_score_list, label='separate_network',fname= 'avg_score_comparison', save_fig=True)
+    obs = env.reset()
+    agent = sepAgent(gamma = 0.99, lr = 5e-6, ip_dims=2, n_actions=5, hl1_dims=512, hl2_dims=512)
+    avg_score_list = method1_forward_aproach(env, agent, n_iters)
+    traj=rollout(env, agent)
+    print("traj", traj)
+    # pl.plot_traj(traj,fname='traj.png', save_fig=True)
+    # plt.clf()
+    pl.plot_series(avg_score_list, label='separate_network',fname= 'avg_score_comparison', save_fig=True)
+
+
+
+if __name__ == "__main__":
+
+    # Problem params
+    custom_env_name = "gym_basic:contGrid-v0"
+    state_dim = 2
+    action_dim = 5
+    grid_dim = [10., 10.]
+    start_pos = [5.0, 2.0]
+    target_pos = [8.0,8.0]
+    target_rad = 1
+
+    dir_output_data= os.path.join(PROJECT_ROOT,"Output_Data")
+    dir_op_env = os.path.join(dir_output_data,custom_env_name)
+    make_dir(dir_op_env) # make subdir based on custom env
+
+    # Prob Name Level 1 (grid params)
+    prob_name_l1 = f"sd{str(state_dim)}_ad{str(action_dim)}_gd{str(grid_dim)}_tp{str(target_pos)}_trd{str(target_rad)}"
+    print("prob_name_l1:",prob_name_l1)
+    dir_prob_name_l1 = os.path.join(dir_op_env, prob_name_l1)
+    make_dir(dir_prob_name_l1)
+
+    env = gym.make(custom_env_name, 
+                    state_dim=state_dim, 
+                    action_dim=action_dim, 
+                    grid_dim=grid_dim,
+                    start_pos=start_pos,
+                    target_pos=target_pos,
+                    target_rad=target_rad)
+    obs = env.reset()
+
+    level_sets =  get_levelsets_dummy(env)
+    pl = customPlot(env)
+    pl.plot_contours(level_sets, fname='contours.png',save_fig=True)
+
+
+# level_sets =  get_levelsets_dummy(env)
+
+# pl = customPlot(env)
+# pl.plot_contours(level_sets, fname='contours.png',save_fig=True)
+# n_iters = 5000
+
+# obs = env.reset()
+# agent = sepAgent(gamma = 0.99, lr = 5e-6, ip_dims=2, n_actions=5, hl1_dims=512, hl2_dims=512)
+# avg_score_list = method1_forward_aproach(env, agent, n_iters)
+# traj=rollout(env, agent)
+# print("traj", traj)
+# # pl.plot_traj(traj,fname='traj.png', save_fig=True)
+# # plt.clf()
+# pl.plot_series(avg_score_list, label='separate_network',fname= 'avg_score_comparison', save_fig=True)
 
 # method2_a(env,level_sets,iters_per_contour=10)
 # traj=rollout(env, agent)

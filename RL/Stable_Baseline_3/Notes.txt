@@ -8,4 +8,4 @@ TODO:
 2. plot returns vs traing time
 3. experiment with more separation and larger grid 
 4. try with velocity field - need level set solver
-5. two way level sets to prune cirricula
+5. (IDEA) two way level sets to prune cirricula

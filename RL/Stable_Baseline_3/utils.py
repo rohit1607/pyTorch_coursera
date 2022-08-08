@@ -7,7 +7,118 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import os
 import sys
+import yaml
+import csv
 
+class make_dir:
+    def __init__(self, dir="experiments", common_subdir="exp_",make_subdirs=[]):
+        self.dir = dir
+        self.common_subdir = common_subdir
+        self.make_subdirs = make_subdirs
+
+    def get_exp_number(self):
+        
+        exists = True
+        i = 0
+        while exists and i<100000:
+            i += 1
+            dir_name = os.path.join(self.dir, self.common_subdir)
+            dir_name = dir_name + "_" + str(i)
+            exists = os.path.isdir(dir_name)
+            if not exists:
+                break
+        
+        return i, dir_name
+
+    def create_subdirs(self):
+        for subdir in self.make_subdirs:
+            subdir = os.path.join(self.new_dir_name,subdir)
+            os.mkdir(subdir)
+        return
+
+    def __call__(self ):
+        self.i, self.new_dir_name = self.get_exp_number()
+        os.mkdir(self.new_dir_name)
+        if len(self.make_subdirs) > 0:
+            self.create_subdirs()
+        return (self.i, self.new_dir_name)
+
+
+def write_params_to_log(param_dict, logfile, 
+                        header_row=True, append=True):
+    if append == True:
+        mode = 'a'
+    else:
+        mode = 'w'
+    with open(logfile, mode) as csv_file:  
+        # writer = csv.writer(csv_file)
+        writer = csv.DictWriter(csv_file, fieldnames=param_dict.keys())
+
+        if header_row == True:
+            # for key, value in param_dict.items():
+            #     writer.writerow([key, value])
+            writer.writeheader()
+        writer.writerow(param_dict)
+
+        # else:
+            # for key, value in param_dict.items():
+            #     writer.writerow([value])
+
+def build_input_param_dict(exp_num, current_filename, env_name, cfg_fname, print_test=False):
+    dict = {}
+    dict["exp_num"] = exp_num
+    dict["current_filename"] = current_filename
+    dict["env_name"] = env_name
+    cfg = read_cfg_file(cfg_fname)
+    print(cfg)
+    for type in cfg: 
+        print(type)
+        for key, value in cfg[type].items():
+            # key = types + '_' + key
+            dict[key] = value            
+
+    if print_test:
+        print(dict)
+    return dict
+
+
+def read_cfg_file(cfg_name, print_dict=False):
+    with open(cfg_name, "r") as file:
+        try:
+            cfg = yaml.safe_load(file)
+        except yaml.YAMLError as exc:
+            print(exc)
+    # if print_dict:
+    #     for item in cfg.keys():
+    #         print()
+    #         for subitem in item.keys():
+    #             print(f"{subitem}: \t {item[subitem]}")
+    return cfg
+
+from project.python.Grid import *
+def get_optimal_path(start, target, vel, F, dims, save_fig=True, fname='hjb_path' ):
+    """ 
+    dims = (xlim, ylim)
+    vel = (U, V) ; U [nt, ni, nj]
+    F = scalar max speed
+    """
+    U,V = vel
+    F_mat = np.ones((1000,dims[0],dims[1]))*F
+    print(start)
+    print(target)
+    start.reverse() 
+    target.reverse()
+    start = [int(x) for x in start]
+    target = [int(x) for x in target]
+
+    cnts=Grid(dims,start,target,F_mat,U,V,5,.5,(1,1),.5,order=2,advection_term=9)
+    cnts.main()
+    contours = cnts._zerocontourslist
+    cnts._plot_contours_with_path3(1, lims=dims)
+    opt_path = cnts._projected_pts
+    if save_fig:
+        plt.savefig(fname)
+    return opt_path, contours
 
 def get_levelsets_dummy(
     env, start_pos, target_pos, vel_field_data=None, tang_spac=1, radial_spac=1, reverse=False
@@ -77,6 +188,7 @@ class customPlot:
 
     def clf(self):
         plt.cla()
+        plt.clf()
 
     def plot_V(self, model, vmin, vmax, fname="", save_fig=False):
         xs = np.linspace(0, self.env.xlim, 100)
@@ -134,8 +246,11 @@ class customPlot:
             plt.savefig(fname, dpi=300)
 
     def plot_series(self, series, label="", title="", fname="", save_fig=False):
-        plt.plot(series, label=label)
+        plt.cla()
+        plt.plot(series, "-o")
+        # plt.scatter(series)
         plt.title(title)
         plt.legend()
         if save_fig:
             plt.savefig(fname, dpi=300)
+        plt.cla()

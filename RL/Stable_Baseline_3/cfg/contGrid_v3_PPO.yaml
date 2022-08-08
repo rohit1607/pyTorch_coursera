@@ -4,12 +4,12 @@ grid_params:
   n_actions: 8
   grid_dims: [50.0, 50.0]
   start_pos: [5.0, 5.0]
-  target_pos: [20.0, 15.0]
+  target_pos: [45.0, 45.0]
   target_rad: 1.0
   F: 1
 
 RL_params:
-  learn: False
+  learn: True
   predict: True
   total_timesteps: 100000
   max_episode_len: 100

@@ -5,7 +5,7 @@ VIEWPORT_W = 600
 VIEWPORT_H = 400
 SCALE = 30
 
-
+# Contnuous states. 4 Discrete Actions
 class ContGridWorld(gym.Env):
     
     def __init__(self, state_dim=2, action_dim=5, grid_dim=[10.,10.],start_pos=[5.0,2.0], target_pos=[8.0,8.0], target_rad=1):
